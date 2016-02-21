@@ -60,7 +60,16 @@ var temp   = initTemp();
 //var uv     = initUv();
 var light    = new groveSensor.GroveLight(2);
 
+var gyro     = new mraa.Aio(3);
+
+var referenceValue = 280;
+var velocityToDisable = 60.0;
+var IR_ENABLED = true;
+var IR_THREAT_DISABLE_TIME = 10000;
+
 var myInterval;
+
+var threatWindow = (new Date()).getTime() - (60*1000);
 
 function initBuzzer() {
   var buzzer = new mraa.Gpio(6);
@@ -102,6 +111,20 @@ function startSensorWatch(socket) {
     }
 
     if(enabled) {
+      var motion = motion.read();
+      
+      if(motion && threatWindow < ((new Date()).getTime() - 10*1000)) {
+         // beep
+      }
+      
+      var gyro_reading = gyro.read();
+      
+      var angularVelocity =((analogValue-referenceValue)*4930)/1023.0/0.67;
+      
+      if(Math.abs(angularVelocity) > velocityToDisable) {
+        threatWindow = (new Date()).getTime(); 
+      }
+      
       ax0 = ax1;
       ay0 = ay1;
       az0 = az1;
@@ -122,14 +145,16 @@ function startSensorWatch(socket) {
       
       //console.log("uv: " + roundNum(uv.value(g_GUVAS12D_AREF, g_SAMPLES_PER_QUERY), 6));
       
-      console.log("motion: " + motion.read());
+      console.log("motion: " + motion);
       
       console.log(light.name() + " raw value is " + light.raw_value() + ", which is roughly " + light.value() + " lux");
 
       
       console.log("acceleration: " + change_in_acceleration);
 
-      if(change_in_acceleration > 1.0) {
+      impacted = change_in_acceleration > 1.0
+      
+      if(impacted) {
         socket.emit('message', 'present');
         buzzer.write(1);
       } else {
