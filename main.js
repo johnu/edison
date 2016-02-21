@@ -63,13 +63,17 @@ var light    = new groveSensor.GroveLight(2);
 var gyro     = new mraa.Aio(3);
 
 var referenceValue = 280;
-var velocityToDisable = 60.0;
 var IR_ENABLED = true;
 var IR_THREAT_DISABLE_TIME = 10000;
 
 var myInterval;
 
 var threatWindow = (new Date()).getTime() - (60*1000);
+var beep = false;
+
+var PROXIMITY_ALERT_SECONDS = 3;
+var VELOCITY_TO_DISABLE = 100.0;
+var IMPACT_THRESHHOLD = 1;
 
 function initBuzzer() {
   var buzzer = new mraa.Gpio(6);
@@ -111,17 +115,26 @@ function startSensorWatch(socket) {
     }
 
     if(enabled) {
-      var motion = motion.read();
+      var m = motion.read();
       
-      if(motion && threatWindow < ((new Date()).getTime() - 10*1000)) {
-         // beep
+      if(m && threatWindow < ((new Date()).getTime() - PROXIMITY_ALERT_SECONDS*1000)) {
+         if(beep) {
+           buzzer.write(1); 
+         } else {
+           buzzer.write(0); 
+         } 
       }
+      
+      console.log("motion: " + m);
       
       var gyro_reading = gyro.read();
       
-      var angularVelocity =((analogValue-referenceValue)*4930)/1023.0/0.67;
+      var angularVelocity =((gyro_reading - referenceValue)*4930)/1023.0/0.67;
       
-      if(Math.abs(angularVelocity) > velocityToDisable) {
+      console.log("Angular velocity: " + angularVelocity + " max " + VELOCITY_TO_DISABLE);
+      
+      if(Math.abs(angularVelocity) > VELOCITY_TO_DISABLE) {
+        console.log("thread disabled for 5 seconds");
         threatWindow = (new Date()).getTime(); 
       }
       
@@ -141,18 +154,9 @@ function startSensorWatch(socket) {
 
       var change_in_acceleration = Math.sqrt(dx*dx + dy*dy + dz*dz);
   
-      console.log("ambient: " + (roundNum(temp.ambientTemperature(), 2) * 9/5 + 32) + " object: " + (roundNum(temp.objectTemperature(), 2) * 9/5 + 32));
-      
-      //console.log("uv: " + roundNum(uv.value(g_GUVAS12D_AREF, g_SAMPLES_PER_QUERY), 6));
-      
-      console.log("motion: " + motion);
-      
-      console.log(light.name() + " raw value is " + light.raw_value() + ", which is roughly " + light.value() + " lux");
+      //console.log("acceleration: " + change_in_acceleration);
 
-      
-      console.log("acceleration: " + change_in_acceleration);
-
-      impacted = change_in_acceleration > 1.0
+      var impacted = change_in_acceleration > IMPACT_THRESHHOLD;
       
       if(impacted) {
         socket.emit('message', 'present');
@@ -161,7 +165,9 @@ function startSensorWatch(socket) {
         buzzer.write(0);
       }
     }
-  }, 500);
+    
+    beep = !beep;
+  }, 50);
 }
 
 //Create Socket.io server
