@@ -1,9 +1,33 @@
 /*jslint node:true,vars:true, unparam:true */
 /*jshint unused:true */
 
+var OTP538U_AREF = 5.0;
+var g_GUVAS12D_AREF = 5.0;
+var g_SAMPLES_PER_QUERY = 1024;
+
 
 var mraa = require("mraa");
 var digitalAccelerometer = require('jsupm_mma7660');
+var tempIRSensor_lib = require('jsupm_otp538u');
+var UVSensor = require('jsupm_guvas12d');
+var groveSensor = require('jsupm_grove');
+
+function initUv() {
+  return (new UVSensor.GUVAS12D(2));
+}
+
+function initTemp() {
+  var temp = new tempIRSensor_lib.OTP538U(0, 1, OTP538U_AREF);
+  
+  return temp;
+}
+
+function initMotion() {
+  var motion = new mraa.Gpio(5);
+  motion.dir(mraa.DIR_IN);
+  
+  return motion;
+}
 
 function initButton() {
   var button = new mraa.Gpio(2);
@@ -29,6 +53,12 @@ function initAccelerometer() {
 }
 
 var myDigitalAccelerometer = initAccelerometer();
+var button = initButton();
+var buzzer = initBuzzer();
+var motion = initMotion();
+var temp   = initTemp();
+//var uv     = initUv();
+var light    = new groveSensor.GroveLight(2);
 
 var myInterval;
 
@@ -43,9 +73,6 @@ function startSensorWatch(socket) {
   'use strict';
   var touch_sensor_value = 0, last_t_sensor_value;
 
-  var button = initButton();
-
-  var buzzer = initBuzzer();
   buzzer.write(0);
 
   var ax, ay, az;
@@ -90,8 +117,17 @@ function startSensorWatch(socket) {
       var dz = az0-az1;
 
       var change_in_acceleration = Math.sqrt(dx*dx + dy*dy + dz*dz);
+  
+      console.log("ambient: " + (roundNum(temp.ambientTemperature(), 2) * 9/5 + 32) + " object: " + (roundNum(temp.objectTemperature(), 2) * 9/5 + 32));
       
-      console.log(change_in_acceleration);
+      //console.log("uv: " + roundNum(uv.value(g_GUVAS12D_AREF, g_SAMPLES_PER_QUERY), 6));
+      
+      console.log("motion: " + motion.read());
+      
+      console.log(light.name() + " raw value is " + light.raw_value() + ", which is roughly " + light.value() + " lux");
+
+      
+      console.log("acceleration: " + change_in_acceleration);
 
       if(change_in_acceleration > 1.0) {
         socket.emit('message', 'present');
